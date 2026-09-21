@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemoPad v4</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#fefce8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js')) }</script>
+    <style>
+        :root {
+            --bg: #fefce8;
+            --card: #ffffff;
+            --text: #111111;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #111111;
+            --yellow: #facc15;
+            --green: #4ade80;
+            --blue: #60a5fa;
+            --red: #f87171
+        }
+
+        [data-theme="dark"] {
+            --bg: #121212;
+            --card: #1e1e1e;
+            --text: #f1f1f1;
+            --muted: #9a9a9a;
+            --border: #2a2a2a;
+            --accent: #f1f1f1
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 16px;
+            max-width: 800px;
+            margin: auto;
+            transition: .2s
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -1px
+        }
+
+        #themeToggle {
+            background: var(--card);
+            border: 1px solid var(--border);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px
+        }
+
+        .toolbar input,
+        .toolbar select {
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            outline: none
+        }
+
+        .btn {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-weight: 600;
+            cursor: pointer
+        }
+
+        .btn-outline {
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border)
+        }
+
+        .colors {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin: 12px 0;
+            flex-wrap: wrap
+        }
+
+        .dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 1px var(--border);
+            transition: .15s
+        }
+
+        .dot.active {
+            outline: 3px solid var(--text);
+            outline-offset: 2px;
+            transform: scale(1.25)
+        }
+
+        .lock-btn {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600
+        }
+
+        #noteTitle,
+        #noteText {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--card);
+            color: var(--text);
+            margin: 8px 0;
+            transition: .2s
+        }
+
+        #noteText {
+            min-height: 120px;
+            resize: vertical
+        }
+
+        .note-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px;
+            margin: 12px 0
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 8px
+        }
+
+        #lockScreen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="lockScreen">
+        <div
+            style="background:var(--card);border:1px solid var(--border);padding:24px;border-radius:20px;text-align:center;width:90%;max-width:320px">
+            <h2>🔒 MemoPad Locked</h2>
+            <input id="unlockInput" type="password" placeholder="Enter PIN"
+                style="width:100%;padding:12px;margin:14px 0;border-radius:10px;border:1px solid var(--border)">
+            <button class="btn" style="width:100%" onclick="unlockApp()">Unlock</button>
+            <p id="lockMsg" style="color:var(--red);font-size:12px;margin-top:8px"></p>
+        </div>
+    </div>
+
+    <header>
+        <h1>MemoPad v4</h1>
+        <button id="themeToggle">🌙</button>
+    </header>
+
+    <div class="toolbar">
+        <input id="search" placeholder="Search" style="flex:1">
+        <button class="btn" id="newBtn">+ New Note</button>
+        <select>
+            <option>All tags</option>
+        </select>
+        <button class="btn btn-outline" id="pdfBtn">PDF</button>
+    </div>
+
+    <div class="colors">
+        <span style="font-size:13px;color:var(--muted)">Colors:</span>
+        <div class="dot" data-color="yellow" style="background:#facc15"></div>
+        <div class="dot" data-color="green" style="background:#4ade80"></div>
+        <div class="dot" data-color="blue" style="background:#60a5fa"></div>
+        <div class="dot" data-color="red" style="background:#f87171"></div>
+        <button class="btn btn-outline lock-btn" id="setLockBtn">Set Lock</button>
+        <button class="btn btn-outline lock-btn" id="lockBtn">🔒 Lock</button>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px" id="editorBox">
+        <input id="noteTitle" placeholder="Untitled">
+        <textarea id="noteText" placeholder="Write your note..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-outline" id="recordBtn">🎙️ Record</button>
+            <button class="btn" id="saveBtn">Save Note</button>
+            <span id="timer" style="color:var(--muted);font-size:13px"></span>
+            <span id="micLevel" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div id="audioPreview" style="margin-top:10px"></div>
+    </div>
+
+    <div id="notes"></div>
+
+    <script>
+        // THEME - Light + Dark (you like both)
+        let curTheme = localStorage.getItem('memopad-theme') || 'light';
+        document.body.setAttribute('data-theme', curTheme);
+        const tBtn = document.getElementById('themeToggle');
+        tBtn.textContent = curTheme === 'dark' ? '☀️' : '🌙';
+        tBtn.onclick = () => { curTheme = curTheme === 'dark' ? 'light' : 'dark'; document.body.setAttribute('data-theme', curTheme); localStorage.setItem('memopad-theme', curTheme); tBtn.textContent = curTheme === 'dark' ? '☀️' : '🌙'; };
+
+        // LOCK - RESTORED
+        function unlockApp() { const pin = document.getElementById('unlockInput').value; if (pin === localStorage.getItem('memopad-pin')) { document.getElementById('lockScreen').style.display = 'none'; document.getElementById('unlockInput').value = ''; } else { document.getElementById('lockMsg').textContent = 'Wrong PIN'; } }
+        document.getElementById('setLockBtn').onclick = () => { const p = prompt('Set 4-digit PIN (leave empty to remove lock):'); if (p === null) return; if (p.trim() === '') { localStorage.removeItem('memopad-pin'); alert('Lock removed'); } else { localStorage.setItem('memopad-pin', p.trim()); alert('Lock set: ' + p.trim()); } };
+        document.getElementById('lockBtn').onclick = () => { if (!localStorage.getItem('memopad-pin')) { alert('Click Set Lock first'); return } document.getElementById('lockScreen').style.display = 'flex'; };
+        if (localStorage.getItem('memopad-pin')) { document.getElementById('lockScreen').style.display = 'flex'; }
+
+        // NOTES + COLORS PREVIEW FIX
+        let notes = JSON.parse(localStorage.getItem('memopad-notes') || '[]');
+        let selectedColor = '';
+        const colorBg = { yellow: '#fef9c3', green: '#dcfce7', blue: '#dbeafe', red: '#fee2e2' };
+        const colorBorder = { yellow: '#facc15', green: '#4ade80', blue: '#60a5fa', red: '#f87171' };
+
+        document.querySelectorAll('.dot').forEach(d => {
+            d.onclick = () => {
+                document.querySelectorAll('.dot').forEach(x => x.classList.remove('active'));
+                d.classList.add('active');
+                selectedColor = d.dataset.color;
+                // PREVIEW INSTANTLY IN EDITOR - THIS IS THE FIX FOR YOUR VIDEO
+                document.getElementById('noteTitle').style.background = colorBg[selectedColor];
+                document.getElementById('noteText').style.background = colorBg[selectedColor];
+                document.getElementById('editorBox').style.borderLeft = `6px solid ${colorBorder[selectedColor]}`;
+            };
+        });
+
+        function render() {
+            const q = document.getElementById('search').value.toLowerCase();
+            const box = document.getElementById('notes'); box.innerHTML = '';
+            notes.filter(n => !q || (n.title && n.title.toLowerCase().includes(q)) || (n.text && n.text.toLowerCase().includes(q))).forEach((n, i) => {
+                const div = document.createElement('div'); div.className = 'note-card';
+                if (n.color) { div.style.borderLeft = `6px solid ${colorBorder[n.color] || '#ddd'}`; div.style.background = colorBg[n.color] || 'var(--card)'; }
+                div.innerHTML = `<b>${n.title || 'Untitled'}</b><p style="margin-top:6px;white-space:pre-wrap">${n.text || ''}</p>${n.audio ? `<audio controls src="${n.audio}"></audio>` : ''}<div style="font-size:12px;color:var(--muted);margin-top:8px">${new Date(n.date).toLocaleString()} • <a href="#" onclick="notes.splice(${i},1);localStorage.setItem('memopad-notes',JSON.stringify(notes));render();return false" style="color:var(--muted)">Delete</a></div>`;
+                box.appendChild(div);
+            });
+        }
+
+        document.getElementById('saveBtn').onclick = () => {
+            const title = document.getElementById('noteTitle').value.trim();
+            const text = document.getElementById('noteText').value.trim();
+            const savedAudio = document.getElementById('audioPreview').dataset.audio || '';
+            // FIXED: Allow audio-only save (this was blocking you in video 1)
+            if (!title && !text && !savedAudio) { alert('Write something or record voice first'); return; }
+            notes.unshift({ title: title || (savedAudio ? 'Voice Note' : 'Untitled'), text, color: selectedColor, audio: savedAudio, date: Date.now() });
+            localStorage.setItem('memopad-notes', JSON.stringify(notes));
+            document.getElementById('noteTitle').value = ''; document.getElementById('noteText').value = ''; document.getElementById('noteTitle').style.background = 'var(--card)'; document.getElementById('noteText').style.background = 'var(--card)'; document.getElementById('editorBox').style.borderLeft = '1px solid var(--border)'; document.getElementById('audioPreview').innerHTML = ''; document.getElementById('audioPreview').dataset.audio = ''; document.querySelectorAll('.dot').forEach(x => x.classList.remove('active')); selectedColor = '';
+            render();
+        };
+        document.getElementById('newBtn').onclick = () => document.getElementById('noteTitle').focus();
+        document.getElementById('search').oninput = render;
+        document.getElementById('pdfBtn').onclick = () => { const { jsPDF } = window.jspdf; const doc = new jsPDF(); let y = 10; notes.forEach(n => { doc.text((n.title || '') + ' ' + (n.text || ''), 10, y); y += 10; if (y > 280) { doc.addPage(); y = 10 } }); doc.save('MemoPad.pdf'); };
+
+        // RECORDING + PLAYBACK FIX - PERMANENT BASE64
+        let mediaRecorder, chunks = [], stream, timerInt, sec = 0;
+        async function toggleRecording() {
+            const btn = document.getElementById('recordBtn');
+            if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); return; }
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const src = audioCtx.createMediaStreamSource(stream);
+                const analyser = audioCtx.createAnalyser(); src.connect(analyser);
+                const data = new Uint8Array(analyser.frequencyBinCount);
+                const levelEl = document.getElementById('micLevel');
+                const levelInt = setInterval(() => { analyser.getByteFrequencyData(data); const avg = data.reduce((a, b) => a + b, 0) / data.length; levelEl.textContent = avg > 5 ? '🎤 Mic OK: ' + Math.round(avg) : '⚠️ Mic silent - check Windows mic vol'; }, 300);
+
+                let mime = ''; if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus'; else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm'; else if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
+                mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+                chunks = []; sec = 0; document.getElementById('timer').textContent = '0s';
+                timerInt = setInterval(() => { sec++; document.getElementById('timer').textContent = sec + 's'; }, 1000);
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    clearInterval(timerInt); clearInterval(levelInt); document.getElementById('micLevel').textContent = '';
+                    const blob = new Blob(chunks, { type: mime || 'audio/webm' });
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64 = reader.result;
+                        document.getElementById('audioPreview').dataset.audio = base64;
+                        document.getElementById('audioPreview').innerHTML = `<audio controls autoplay src="${base64}"></audio><br><small style="color:green">✓ Recording ready - click Save Note. Will play after save + refresh</small>`;
+                    };
+                    reader.readAsDataURL(blob);
+                    stream.getTracks().forEach(t => t.stop()); audioCtx.close();
+                    btn.textContent = '🎙️ Record'; document.getElementById('timer').textContent = '';
+                };
+                mediaRecorder.start(100); btn.textContent = '⏹️ Stop'; document.getElementById('audioPreview').innerHTML = '<small style="color:var(--muted)">🔴 Recording... speak loud</small>';
+            } catch (err) { alert('Mic blocked: ' + err.message + '\nAllow mic in browser'); }
+        }
+        document.getElementById('recordBtn').onclick = toggleRecording;
+        render();
+    </script>
+</body>
+
+</html>
